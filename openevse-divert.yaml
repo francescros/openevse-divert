@@ -1,0 +1,126 @@
+esphome:
+  name: openevse-divert
+  friendly_name: openevse-divert
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+# api:
+#   encryption:
+#     key: !secret api_key
+
+mqtt:
+  broker: !secret mqtt_host
+  port: 1883
+
+ota:
+  - platform: esphome
+    password: !secret ota_pwd
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Openevse-divert Fallback Hotspot"
+    password: !secret ap_pwd
+
+captive_portal:
+
+  # Enable Web server
+web_server:
+   port: 80
+   include_internal: True    
+
+sensor:
+  
+  - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
+    name: "WiFi Signal dB"
+    id: wifi_signal_db
+    update_interval: 60s
+    entity_category: "diagnostic"  
+
+text_sensor:
+
+  - platform: wifi_info
+    ip_address:
+      name: ESP IP Address
+    ssid:
+      name: ESP Connected SSID
+    mac_address:
+      name: ESP Mac Wifi Address
+
+  - platform: mqtt_subscribe
+    name: "Divert mode text"
+    id: divertmode_txt
+    topic: openevse/divertmode
+
+binary_sensor:
+
+  - platform: template
+    name: "Divert mode bin"
+    id: divertmode_bin # boolean sensor, true when ECO mode is ON
+    lambda: |-
+      if (id(divertmode_txt).state == "2") {
+        // Divert mode is ECO.
+        return true;
+      } else {
+        // Divert mode is False.
+        return false;
+      }
+    on_state:
+      then:
+        - if:
+            condition:
+              binary_sensor.is_on: divertmode_bin
+            then:
+              - output.turn_on: output_led
+            else:
+              - output.turn_off: output_led
+
+
+  - platform: gpio
+    pin:
+      number: GPIO0
+      inverted: True
+      mode: INPUT_PULLUP
+    name: "Divert mode toggle"
+    id: puls_divert
+    on_press:
+      then:
+        - if:
+            condition: 
+              binary_sensor.is_on: divertmode_bin
+            then:
+              - mqtt.publish:
+                  topic: "openevse/divertmode/set"
+                  payload: "1"
+                  retain: true
+                  qos: 0
+            else:
+              - mqtt.publish:
+                  topic: "openevse/divertmode/set"
+                  payload: "2"
+                  retain: true
+                  qos: 0
+
+output:
+
+  - platform: gpio
+    pin: GPIO1
+    id: output_led
+
+light:
+
+  - platform: binary
+    id: light_led
+    name: LED
+    output: output_led
