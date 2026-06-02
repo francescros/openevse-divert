@@ -1,4 +1,4 @@
-# openevse-divert
+# OpenEVSE Divert topggler
 
 Button for manual toggle divert mode in OpenEVSE via MQTT with ESPHome
 
